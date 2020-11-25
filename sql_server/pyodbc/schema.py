@@ -677,7 +677,13 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         if self.connection.features.connection_persists_old_columns:
             self.connection.close()
 
-    def _create_unique_sql(self, model, columns, name=None, condition=None):
+    def _create_unique_sql(self, model, columns, name=None, condition=None, deferrable=None):
+        if (
+            deferrable and
+            not self.connection.features.supports_deferrable_unique_constraints
+        ):
+            return None
+
         def create_unique_name(*args, **kwargs):
             return self.quote_name(self._create_index_name(*args, **kwargs))
 
@@ -694,7 +700,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 name=name,
                 columns=columns,
                 condition=' WHERE ' + condition,
-                deferrable=''
+                deferrable=self._deferrable_constraint_sql(deferrable)
             ) if self.connection.features.supports_partial_indexes else None
         else:
             return Statement(
@@ -702,7 +708,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 table=table,
                 name=name,
                 columns=columns,
-                deferrable=''
+                deferrable=self._deferrable_constraint_sql(deferrable)
             )
 
     def _create_index_sql(self, model, fields, *, name=None, suffix='', using='',
